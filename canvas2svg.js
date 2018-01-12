@@ -5,6 +5,9 @@
  *  Licensed under the MIT license:
  *  http://www.opensource.org/licenses/mit-license.php
  *
+ *  https://raw.githubusercontent.com/mudcube/canvas2svg/c7bd3747891909ba897e03ee8ff6b1a3c03e6338/canvas2svg.js
+ *  + changes made for GeoGebra
+ *  
  *  Author:
  *  Kerry Liu
  *
@@ -368,10 +371,11 @@
                     //pattern
                     if (value.__ctx) {
                         //copy over defs
-                        while(value.__ctx.__defs.childNodes.length) {
-                            id = value.__ctx.__defs.childNodes[0].getAttribute("id");
+						var len = value.__ctx.__defs.childNodes.length;
+						for (var i = 0 ; i < len ; i++) {
+                            id = value.__ctx.__defs.childNodes[i].getAttribute("id");
                             this.__ids[id] = id;
-                            this.__defs.appendChild(value.__ctx.__defs.childNodes[0]);
+                            this.__defs.appendChild(value.__ctx.__defs.childNodes[i]);
                         }
                     }
                     currentElement.setAttribute(style.apply, format("url(#{id})", {id:value.__root.getAttribute("id")}));
@@ -755,9 +759,12 @@
     /**
      * Sets fill properties on the current element
      */
-    ctx.prototype.fill = function () {
+    ctx.prototype.fill = function (fillRule) {
         if (this.__currentElement.nodeName === "path") {
             this.__currentElement.setAttribute("paint-order", "stroke fill markers");
+            if (fillRule == "evenodd") {
+            	this.__currentElement.setAttribute("fill-rule", "evenodd");
+            } 
         }
         this.__applyCurrentDefaultPath();
         this.__applyStyleToCurrentElement("fill");
@@ -902,7 +909,7 @@
      * @private
      */
     ctx.prototype.__parseFont = function () {
-        var regex = /^\s*(?=(?:(?:[-a-z]+\s*){0,2}(italic|oblique))?)(?=(?:(?:[-a-z]+\s*){0,2}(small-caps))?)(?=(?:(?:[-a-z]+\s*){0,2}(bold(?:er)?|lighter|[1-9]00))?)(?:(?:normal|\1|\2|\3)\s*){0,3}((?:xx?-)?(?:small|large)|medium|smaller|larger|[.\d]+(?:\%|in|[cem]m|ex|p[ctx]))(?:\s*\/\s*(normal|[.\d]+(?:\%|in|[cem]m|ex|p[ctx])))?\s*([-,\'\"\sa-z0-9]+?)\s*$/i;
+        var regex = /^\s*(?=(?:(?:[-a-z]+\s*){0,2}(italic|oblique))?)(?=(?:(?:[-a-z]+\s*){0,2}(small-caps))?)(?=(?:(?:[-a-z]+\s*){0,2}(bold(?:er)?|lighter|[1-9]00))?)(?:(?:normal|\1|\2|\3)\s*){0,3}((?:xx?-)?(?:small|large)|medium|smaller|larger|[.\d]+(?:\%|in|[cem]m|ex|p[ctx]))(?:\s*\/\s*(normal|[.\d]+(?:\%|in|[cem]m|ex|p[ctx])))?\s*([-_,\'\"\sa-z0-9]+?)\s*$/i;
         var fontPart = regex.exec( this.font );
         var data = {
             style : fontPart[1] || 'normal',
@@ -1139,6 +1146,7 @@
         } else if (image.nodeName === "CANVAS" || image.nodeName === "IMG") {
             //canvas or image
             svgImage = this.__createElement("image");
+            svgImage.setAttribute("opacity", this.globalAlpha || 1);
             svgImage.setAttribute("width", dw);
             svgImage.setAttribute("height", dh);
             svgImage.setAttribute("preserveAspectRatio", "none");
@@ -1158,6 +1166,35 @@
             parent.appendChild(svgImage);
         }
     };
+    
+    ctx.prototype.createPatternSVG = function (image, repetition) {
+        var pattern = this.__document.createElementNS("http://www.w3.org/2000/svg", "pattern"), id = randomString(this.__ids),
+            path;
+        pattern.setAttribute("id", id);
+        pattern.setAttribute("width", image.width);
+        pattern.setAttribute("height", image.height);
+        pattern.setAttribute("patternUnits", "userSpaceOnUse");
+        // eg patternTransform="rotate(35)"
+        // don't need to include for undefined or zero!
+        if (image.angle) {
+        	pattern.setAttribute("patternTransform", "rotate("+image.angle+")");
+        }
+        if (image.path && image.style) {
+        	// assume SVG fill pattern
+        	path = this.__document.createElementNS("http://www.w3.org/2000/svg", "path");
+        	// eg
+        	//path.setAttribute("d", "M34.64101615137754,40.0L34.64101615137754,80.0L0.0,100.0L0.0,120.0M34.64101615137754,80.0L69.28203230275508,100.0L69.28203230275508,120.0M0.0,0.0L0.0,20.0L34.64101615137754,40.0L69.28203230275508,20.0L69.28203230275508,0.0")
+        	path.setAttribute("d", image.path);
+        	// eg
+        	//path.setAttribute("style", "stroke:black; stroke-width:1");
+        	path.setAttribute("style", image.style);
+        	path.setAttribute("fill", image.fill);
+        	pattern.appendChild(path);
+        	this.__defs.appendChild(pattern);
+        }
+        return new CanvasPattern(pattern, this);
+    };
+
 
     /**
      * Generates a pattern tag
@@ -1168,6 +1205,7 @@
         pattern.setAttribute("id", id);
         pattern.setAttribute("width", image.width);
         pattern.setAttribute("height", image.height);
+        pattern.setAttribute("patternUnits", "userSpaceOnUse");
         if (image.nodeName === "CANVAS" || image.nodeName === "IMG") {
             img = this.__document.createElementNS("http://www.w3.org/2000/svg", "image");
             img.setAttribute("width", image.width);
